@@ -1,0 +1,89 @@
+import re
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment
+from openpyxl.worksheet.page import PageMargins, PrintPageSetup
+
+def ass_to_excel(input_ass_path, output_xlsx_path):
+    """
+    Конвертирует файл субтитров .ass в Excel-файл с форматированием:
+    - Ширина таблицы на весь лист A4 (вертикальная ориентация)
+    - Шрифт 16pt для всех ячеек
+    - Автоподбор ширины колонок:
+      * Время - по содержимому
+      * Имя актера - по самому длинному имени
+      * Текст - оставшаяся ширина
+    """
+    # Чтение и парсинг .ass файла
+    with open(input_ass_path, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+
+    events = []
+    in_events_section = False
+
+    for line in lines:
+        line = line.strip()
+        if line == "[Events]":
+            in_events_section = True
+            continue
+        if in_events_section and line.startswith("Dialogue:"):
+            parts = line.split(",", maxsplit=9)
+            if len(parts) >= 10:
+                start_time = parts[1].strip()
+                actor = parts[4].strip() if len(parts) > 4 else ""
+                text = re.sub(r'\{.*?\}', '', parts[9].strip()).replace("\\N", " ")
+                events.append([start_time, actor, text])
+
+    # Создание Excel-файла
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Субтитры"
+
+    # Добавление заголовков
+    headers = ["Время начала", "Имя актера", "Текст"]
+    ws.append(headers)
+
+    # Добавление данных
+    for event in events:
+        ws.append(event)
+
+    # Настройка стилей
+    font = Font(size=16)
+    alignment = Alignment(wrap_text=True)
+    for row in ws.iter_rows():
+        for cell in row:
+            cell.font = font
+            cell.alignment = alignment
+
+    # Расчет ширины колонок
+    max_time_length = max(len(str(event[0])) for event in events) if events else 15
+    max_actor_length = max(len(str(event[1])) for event in events) if events else 15
+    
+    # Установка ширины колонок
+    ws.column_dimensions['A'].width = max_time_length + 2  # Время
+    ws.column_dimensions['B'].width = max_actor_length + 2  # Имя актера
+    ws.column_dimensions['C'].width = 80 - max_time_length - max_actor_length  # Текст
+
+    # Настройка страницы для печати
+    ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.fitToWidth = 1
+    
+    # Установка узких полей
+    ws.page_margins = PageMargins(
+        left=0.5, right=0.5, top=0.5, bottom=0.5,
+        header=0.3, footer=0.3
+    )
+
+    # Сохранение файла
+    wb.save(output_xlsx_path)
+    print(f"Файл успешно сохранён: {output_xlsx_path}")
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) != 3:
+        print("Использование: python ass_to_excel.py <input.ass> <output.xlsx>")
+        sys.exit(1)
+    
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+    ass_to_excel(input_file, output_file)
