@@ -1,32 +1,14 @@
-import os
-import re
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 import json
+import re
 from io import BytesIO
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 
 class ASSConverter:
     @staticmethod
-    def convert_ass_to_excel(ass_content):
-        """Конвертирует содержимое ASS файла в Excel"""
-        events = []
-        in_events_section = False
-
-        for line in ass_content.splitlines():
-            line = line.strip()
-            if line == "[Events]":
-                in_events_section = True
-                continue
-            if in_events_section and line.startswith("Dialogue:"):
-                parts = line.split(",", maxsplit=9)
-                if len(parts) >= 10:
-                    start_time = parts[1].strip()
-                    actor = parts[4].strip() if len(parts) > 4 else ""
-                    text = re.sub(r'\{.*?\}', '', parts[9].strip()).replace("\\N", " ")
-                    events.append([start_time, actor, text])
-
-        # Создание Excel
+    def convert(ass_content):
+        """Конвертирует ASS-контент в Excel файл"""
         wb = Workbook()
         ws = wb.active
         ws.title = "Субтитры"
@@ -35,11 +17,23 @@ class ASSConverter:
         headers = ["Время начала", "Имя актера", "Текст"]
         ws.append(headers)
 
-        # Данные
-        for event in events:
-            ws.append(event)
+        # Парсинг ASS
+        events = []
+        in_events = False
+        
+        for line in ass_content.splitlines():
+            line = line.strip()
+            if line == "[Events]":
+                in_events = True
+                continue
+            if in_events and line.startswith("Dialogue:"):
+                parts = line.split(",", 9)
+                start = parts[1].strip()
+                actor = parts[4].strip() if len(parts) > 4 else ""
+                text = re.sub(r'\{.*?\}', '', parts[9]).replace("\\N", " ")
+                ws.append([start, actor, text])
 
-        # Стили
+        # Форматирование
         font = Font(size=16)
         alignment = Alignment(wrap_text=True)
         for row in ws.iter_rows():
@@ -47,9 +41,9 @@ class ASSConverter:
                 cell.font = font
                 cell.alignment = alignment
 
-        # Автоподбор ширины
+        # Автоширина колонок
         ws.column_dimensions['A'].width = 20
-        ws.column_dimensions['B'].width = 25
+        ws.column_dimensions['B'].width = 25 
         ws.column_dimensions['C'].width = 50
 
         # Сохраняем в буфер
@@ -65,8 +59,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             post_data = self.rfile.read(content_length)
             
             # Получаем файл из multipart/form-data
-            boundary = self.headers['Content-Type'].split('=')[1]
-            parts = post_data.split(boundary.encode())
+            boundary = self.headers['Content-Type'].split('=')[1].encode()
+            parts = post_data.split(boundary)
             
             file_content = None
             for part in parts:
@@ -79,24 +73,24 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
             
             # Конвертация
-            converter = ASSConverter()
-            excel_file = converter.convert_ass_to_excel(file_content.decode('utf-8'))
+            excel_file = ASSConverter.convert(file_content.decode('utf-8'))
             
-            # Отправка результата
+            # Отправка Excel-файла
             self.send_response(200)
             self.send_header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-            self.send_header('Content-Disposition', 'attachment; filename="converted.xlsx"')
+            self.send_header('Content-Disposition', 'attachment; filename="subtitles.xlsx"')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(excel_file.getvalue())
             
         except Exception as e:
-            self.send_error(500, f"Conversion error: {str(e)}")
+            self.send_error(500, f"Error: {str(e)}")
 
-def run_server():
-    server_address = ('', 8000)
-    httpd = HTTPServer(server_address, RequestHandler)
+def run():
+    server = ('', 8000)
+    httpd = HTTPServer(server, RequestHandler)
     print("Server running on port 8000...")
     httpd.serve_forever()
 
 if __name__ == '__main__':
-    run_server()
+    run()
