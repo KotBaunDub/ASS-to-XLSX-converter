@@ -1,54 +1,175 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Конвертер ASS в Excel</title>
     <style>
-        body { font-family: Arial; max-width: 600px; margin: 0 auto; padding: 20px; }
-        button { padding: 10px 15px; background: #28a745; color: white; border: none; cursor: pointer; }
-        #status { margin-top: 15px; }
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .upload-area {
+            border: 2px dashed #3498db;
+            padding: 30px;
+            text-align: center;
+            margin: 20px 0;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+            cursor: pointer;
+        }
+        #fileInput {
+            display: none;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            display: block;
+            margin: 20px auto;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .loading {
+            color: #0c5460;
+            background-color: #d1ecf1;
+        }
     </style>
 </head>
 <body>
-    <h1>Конвертер ASS в Excel</h1>
-    <input type="file" id="fileInput" accept=".ass">
-    <button onclick="convert()">Конвертировать</button>
-    <div id="status"></div>
+    <div class="container">
+        <h1>Конвертер ASS в Excel</h1>
+        <p>Загрузите файл субтитров (.ass) для конвертации в форматированную Excel-таблицу</p>
+        
+        <label for="fileInput">
+            <div class="upload-area" id="uploadArea">
+                <p>Перетащите файл сюда или кликните для выбора</p>
+                <p><small>Поддерживаются только файлы .ass</small></p>
+            </div>
+        </label>
+        <input type="file" id="fileInput" accept=".ass">
+        
+        <button id="convertBtn" disabled>Конвертировать</button>
+        
+        <div id="status"></div>
+    </div>
 
     <script>
-        async function convert() {
-            const file = document.getElementById('fileInput').files[0];
-            if (!file) {
-                document.getElementById('status').textContent = "Выберите файл!";
-                return;
+        // Элементы DOM
+        const fileInput = document.getElementById('fileInput');
+        const convertBtn = document.getElementById('convertBtn');
+        const statusDiv = document.getElementById('status');
+        const uploadArea = document.getElementById('uploadArea');
+
+        // Обработка перетаскивания файлов
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#2ecc71';
+            uploadArea.style.backgroundColor = '#e8f4fc';
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.borderColor = '#3498db';
+            uploadArea.style.backgroundColor = '#f8f9fa';
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#3498db';
+            uploadArea.style.backgroundColor = '#f8f9fa';
+            
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                handleFileSelection();
             }
+        });
 
-            const formData = new FormData();
-            formData.append('file', file);
+        // Обработка выбора файла
+        fileInput.addEventListener('change', handleFileSelection);
 
-            document.getElementById('status').textContent = "Обработка...";
+        function handleFileSelection() {
+            if (fileInput.files.length) {
+                const fileName = fileInput.files[0].name;
+                uploadArea.innerHTML = `<p>Выбран файл: <strong>${fileName}</strong></p>`;
+                convertBtn.disabled = false;
+            }
+        }
+
+        // Конвертация
+        convertBtn.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            statusDiv.className = 'loading';
+            statusDiv.innerHTML = 'Идет обработка файла... <div class="spinner"></div>';
 
             try {
-                // Отправка файла на сервер (Python через GitHub Actions)
-                const response = await fetch('https://ваш-логин.github.io/ass-to-excel-converter/convert', {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                // Отправка на сервер (Python скрипт)
+                const response = await fetch('https://your-vercel-app.vercel.app/api/convert', {
                     method: 'POST',
                     body: formData
                 });
 
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'converted.xlsx';
-                    a.click();
-                    document.getElementById('status').textContent = "Готово!";
-                } else {
-                    document.getElementById('status').textContent = "Ошибка конвертации.";
-                }
+                if (!response.ok) throw new Error('Ошибка сервера');
+
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file.name.replace('.ass', '.xlsx') || 'converted.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+
+                statusDiv.className = 'success';
+                statusDiv.textContent = 'Конвертация завершена! Файл скачивается...';
             } catch (error) {
-                document.getElementById('status').textContent = "Ошибка: " + error.message;
+                statusDiv.className = 'error';
+                statusDiv.textContent = `Ошибка: ${error.message}`;
+                console.error(error);
+            } finally {
+                convertBtn.disabled = true;
+                fileInput.value = '';
+                uploadArea.innerHTML = '<p>Перетащите файл сюда или кликните для выбора</p><p><small>Поддерживаются только файлы .ass</small></p>';
             }
-        }
+        });
     </script>
 </body>
 </html>
