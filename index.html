@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Конвертер ASS в Excel</title>
+    <style>
+        body { font-family: Arial; max-width: 600px; margin: 0 auto; padding: 20px; }
+        button { padding: 10px 15px; background: #28a745; color: white; border: none; cursor: pointer; }
+        #status { margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <h1>Конвертер ASS в Excel</h1>
+    <input type="file" id="fileInput" accept=".ass">
+    <button onclick="convert()">Конвертировать</button>
+    <div id="status"></div>
+
+    <script>
+        async function convert() {
+            const file = document.getElementById('fileInput').files[0];
+            if (!file) {
+                document.getElementById('status').textContent = "Выберите файл!";
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            document.getElementById('status').textContent = "Обработка...";
+
+            try {
+                // Отправка файла на сервер (Python через GitHub Actions)
+                const response = await fetch('https://ваш-логин.github.io/ass-to-excel-converter/convert', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'converted.xlsx';
+                    a.click();
+                    document.getElementById('status').textContent = "Готово!";
+                } else {
+                    document.getElementById('status').textContent = "Ошибка конвертации.";
+                }
+            } catch (error) {
+                document.getElementById('status').textContent = "Ошибка: " + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
